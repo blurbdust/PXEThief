@@ -714,10 +714,11 @@ def analyse_task_sequence_for_potential_creds(ts_xml):
                 for unique_word in unique_words:
 
                     for el in par.xpath('//*[contains(translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"' + unique_word + '")]'):
-                        if el != element: #duplicate tags that match more than one keyword
+                        if (el != element and el.text is not None): #duplicate tags that match more than one keyword
                             print(el.attrib["name"] + " - " + el.text)        
                     
-                print(element.attrib["name"] + " - " + str(element.text))
+                if(el.text is not None):
+                    print(element.attrib["name"] + " - " + str(element.text))
                 print()
     
     if not creds_found:
@@ -742,6 +743,7 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
     
     #ClientID is x64UnknownMachineGUID from /SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA request
     print("[+] Retrieving x64UnknownMachineGUID from MECM MP...")
+    sccm_base_url = sccm_base_url.split("*")[0]
     r = session.get(sccm_base_url + "/SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA")
 
     #Parse XML and retrieve x64UnknownMachineGUID
