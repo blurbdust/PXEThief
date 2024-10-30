@@ -717,7 +717,7 @@ def analyse_task_sequence_for_potential_creds(ts_xml):
                         if (el != element and el.text is not None): #duplicate tags that match more than one keyword
                             print(el.attrib["name"] + " - " + el.text)        
                     
-                if(el.text is not None):
+                if(element.text is not None):
                     print(element.attrib["name"] + " - " + str(element.text))
                 print()
     
