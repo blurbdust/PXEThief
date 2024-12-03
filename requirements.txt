@@ -8,3 +8,4 @@ certipy-ad
 pandas
 tabulate
 asn1crypto
+hexdump
