@@ -432,28 +432,47 @@ def decrypt_media_file(path, password):
     return wf_decrypted_ts
 
 def process_pxe_bootable_and_prestaged_media(media_xml):
-
-    #Parse media file in order to pull out PFX password and PFX bytes
+    # Parse media file in order to pull out PFX password and PFX bytes
     root = ET.fromstring(media_xml.encode("utf-16-le"))
-    smsMediaGuid = root.find('.//var[@name="_SMSMediaGuid"]').text 
+    smsMediaGuid = root.find('.//var[@name="_SMSMediaGuid"]').text
     smsTSMediaPFX = root.find('.//var[@name="_SMSTSMediaPFX"]').text
 
     global SCCM_BASE_URL
+
     if SCCM_BASE_URL == "":
-        print("[+] Identifying Management Point URL from media variables (Subsequent requests may fail if DNS does not resolve!)")
-        #Partial Media - SMSTSLocationMPs
+        print(
+            "[+] Identifying Management Point URL from media variables (Subsequent requests may fail if DNS does not resolve!)"
+        )
+        # Partial Media - SMSTSLocationMPs
         SMSTSMP = root.find('.//var[@name="SMSTSMP"]')
         SMSTSLocationMPs = root.find('.//var[@name="SMSTSLocationMPs"]')
         if SMSTSMP is not None:
             SCCM_BASE_URL = SMSTSMP.text
+            # Check if multiple URLs are present
+            if "*" in SCCM_BASE_URL:
+                # Split into multiple URLs
+                SMSTSLocationMPs = SCCM_BASE_URL.split("*")
+                for url in SMSTSLocationMPs:
+                    # Set SCCM_BASE_URL to each URL and call the function
+                    SCCM_BASE_URL = url
+                    print("[+] Management Point URL set to: " + SCCM_BASE_URL)
+                    dowload_and_decrypt_policies_using_certificate(
+                        smsMediaGuid, smsTSMediaPFX
+                    )
+            else:
+                # Single URL case
+                print("[+] Management Point URL set to: " + SCCM_BASE_URL)
+                dowload_and_decrypt_policies_using_certificate(
+                    smsMediaGuid, smsTSMediaPFX
+                )
         elif SMSTSLocationMPs is not None:
             SCCM_BASE_URL = SMSTSLocationMPs.text
-        
-        print("[+] Management Point URL set to: " + SCCM_BASE_URL)
+            print("[+] Management Point URL set to: " + SCCM_BASE_URL)
+            dowload_and_decrypt_policies_using_certificate(smsMediaGuid, smsTSMediaPFX)
     else:
+        # Use the manually set URL
         print("[+] Using manually set Management Point URL of: " + SCCM_BASE_URL)
-    
-    dowload_and_decrypt_policies_using_certificate(smsMediaGuid,smsTSMediaPFX) 
+        dowload_and_decrypt_policies_using_certificate(smsMediaGuid, smsTSMediaPFX)
 
 def process_full_media(password, policy):
 
@@ -576,7 +595,12 @@ def dowload_and_decrypt_policies_using_certificate(guid,cert_bytes):
             wf_dstr = "".join(c for c in dstr if c.isprintable())
             #print(wf_dstr)
         
-        root = ET.fromstring(wf_dstr)
+        try:
+            root = ET.fromstring(wf_dstr)
+        except Exception:
+            print("We found faulty xml string and we try to fix it")
+            wf_dstr = "".join(char for char in wf_dstr if ord(char) < 128)
+            root = ET.fromstring(wf_dstr)
         dstr = zlib.decompress(binascii.unhexlify(root.text)).decode("utf-16-le")
         wf_dstr = "".join(c for c in dstr if c.isprintable()) 
         write_to_file("CollectionSettings", wf_dstr)
