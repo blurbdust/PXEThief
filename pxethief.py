@@ -193,7 +193,9 @@ def find_pxe_server():
     else:
         print("[-] No DHCP responses received with PXE boot options") 
         sys.exit(-1)
-    
+    if not tftp_server:
+        print("[-] No PXE boot server found in DHCP response") 
+        sys.exit(-1)
     tftp_server = validate_ip_or_resolve_hostname(tftp_server.strip())
 
     print("")
@@ -788,7 +790,7 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
                 allPoliciesURLs[policy.get("PolicyCategory")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
             else:
                 if policy.get("PolicyCategory") is None:
-                    allPoliciesURLs["".join(i for i in policy.get("PolicyID") if i not in "\/:*?<>|")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
+                    allPoliciesURLs["".join(i for i in policy.get("PolicyID") if i not in r"\/:*?<>|")] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
                 else:
                     allPoliciesURLs[policy.get("PolicyCategory") + str(dedup)] = policy.find("PolicyLocation").text.replace("http://<mp>",sccm_base_url) 
                     dedup = dedup + 1
@@ -875,7 +877,7 @@ if __name__ == "__main__":
         print("%s 4 <variables-file-name> <policy-file-path> <password> - Attempt to decrypt a saved media variables file and Task Sequence XML file retrieved from a full TS media" % sys.argv[0])
         print("%s 5 <variables-file-name> - Print the hash corresponding to a specified media variables file for cracking in hashcat" % sys.argv[0])
         print("%s 6 <identityguid> <identitycert-file-name> - Retrieve task sequences using the values obtained from registry keys on a DP" % sys.argv[0])
-        print("%s 7 <Reserved1-value> - Decrypt stored PXE password from SCCM DP registry key (reg query HKLM\software\microsoft\sms\dp /v Reserved1)" % sys.argv[0])
+        print(r"%s 7 <Reserved1-value> - Decrypt stored PXE password from SCCM DP registry key (reg query HKLM\software\microsoft\sms\dp /v Reserved1)" % sys.argv[0])
         print("%s 8 - Write new default settings.ini file in PXEThief directory" % sys.argv[0])
         print("%s 10 - Print Scapy interface table to identify interface indexes for use in 'settings.ini'" % sys.argv[0])
 
