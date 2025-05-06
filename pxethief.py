@@ -25,6 +25,7 @@ import requests
 from requests_toolbelt import MultipartEncoder,MultipartDecoder
 import zlib
 import datetime
+import urllib3
 from os import walk,system
 from ipaddress import IPv4Network,IPv4Address
 from certipy.lib.certificate import load_pfx,key_to_pem,cert_to_pem
@@ -32,7 +33,8 @@ from sccmwtf import SCCMTools, Tools, CryptoTools, policyBody, msgHeaderPolicy, 
 from cryptography.hazmat.primitives.asymmetric import padding
 import tftpy
 from asn1crypto import cms
-import hexdump
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 #Scapy global variables
 osName = platform.system()
