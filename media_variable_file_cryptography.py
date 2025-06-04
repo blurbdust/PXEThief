@@ -79,5 +79,12 @@ def _3des_decrypt_raw(data,key,iv=b"\x00"*8):
 
 def read_media_variable_file_header(filename):
     media_file = open(filename,'rb')
-    media_data = media_file.read(40)
-    return media_data
+    media_data = media_file.read(40).hex()
+    hash_type = ""
+    if media_data[32:36] == "0e66":
+        hash_type = "aes128$"
+    if media_data[32:36] == "1066":
+        hash_type = "aes256$"
+    if media_data[32:36] == "0366":
+        hash_type = "3des..$"
+    return hash_type + media_data
