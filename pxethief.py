@@ -399,14 +399,32 @@ def CryptDecryptMessage(pfx, data):
         print(f"{enc_algo} not implemented yet")
     return decrypted_data
 
+def credential_string_algo(credential_string):
+    hash_type = ""
+    algo_bytes = credential_string[112:116]
+    if algo_bytes == "1066":
+        hash_type = "aes256"
+    elif algo_bytes == "0366":
+        hash_type = "3des"
+    return hash_type
+
+
 def deobfuscate_credential_string(credential_string):
-    #print(credential_string)
+    algo = credential_string_algo(credential_string)
     key_data = binascii.unhexlify(credential_string[8:88])
     encrypted_data = binascii.unhexlify(credential_string[128:])
-
     key = media_crypto.aes_des_key_derivation(key_data)
     last_16 = math.floor(len(encrypted_data)/8)*8
-    return media_crypto._3des_decrypt(encrypted_data[:last_16],key[:24])
+    
+    if algo == "3des":
+        print("[!] Decrypting using 3DES")
+        last_16 = math.floor(len(encrypted_data)/8)*8
+        return media_crypto._3des_decrypt(encrypted_data[:last_16], key[:24])
+    elif algo == "aes256":
+        print("[!] Decrypting using AES256")
+        last_16 = math.floor(len(encrypted_data)/16)*16 
+        return media_crypto.aes256_decrypt(encrypted_data[:last_16], key[:32])
+    #return media_crypto._3des_decrypt(encrypted_data[:last_16],key[:24])
 
 def decrypt_media_file(path, password):
 
