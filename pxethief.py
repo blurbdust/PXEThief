@@ -537,7 +537,11 @@ def use_encrypted_key(encrypted_key=None, media_file_path=None, encrypted_bytes=
 
     key = media_crypto.aes_des_key_derivation(key_data) # Derive key to decrypt key bytes in the DHCP response
 
-    var_file_key = (media_crypto.aes128_decrypt_raw(encrypted_bytes[:16],key[:16])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+    var_file_key = None
+    if "aes256" in media_crypto.read_media_variable_file_header(media_file_path)[0:6]:
+        var_file_key = (media_crypto.aes256_decrypt_raw(encrypted_bytes[:16],key[:32])[:10])
+    else:
+        var_file_key = (media_crypto.aes128_decrypt_raw(encrypted_bytes[:16],key[:16])[:10]) #10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
     
     #Perform bit extension
     LEADING_BIT_MASK =  b'\x80'
