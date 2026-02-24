@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "pxethief"
+version = "1.0.0"
+dependencies = [
+    "scapy>=2.4.5",
+    "requests>=2.27.1",
+    "requests-toolbelt>=0.9.1",
+    "pycryptodome>=3.14.1",
+    "lxml>=4.9.1",
+    "tftpy",
+    "certipy-ad",
+    "pandas",
+    "tabulate",
+    "asn1crypto",
+    "requests-ntlm",
+    "cryptography",
+]
+[project.scripts]
+pxethief = "pxethief:main"
+
+[tool.setuptools]
+py-modules = ["pxethief", "media_variable_file_cryptography", "sccmwtf"]
+
+[tool.setuptools.package-data]
+"*" = ["settings.ini"]

@@ -943,7 +943,8 @@ def write_default_config_file():
     with open('settings.ini', 'w') as configfile:
       config.write(configfile)
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for pxethief"""
     name = r""" 
  ________  ___    ___ _______  _________  ___  ___  ___  _______   ________ 
 |\   __  \|\  \  /  /|\  ___ \|\___   ___\\  \|\  \|\  \|\  ___ \ |\  _____\
@@ -1072,3 +1073,6 @@ if __name__ == "__main__":
     elif int(sys.argv[1]) == 8:
         print("[+] Writing new 'settings.ini' file to PXEThief folder with default values")
         write_default_config_file()
+
+if __name__ == "__main__":
+    main()
